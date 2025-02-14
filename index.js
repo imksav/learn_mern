@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const { getCollection } = require("./dbConnection");
+const { ObjectId } = require("mongodb");
 
 const app = express();
 app.use(express.json());
@@ -20,7 +21,6 @@ app.get("/", async (req, res) => {
       error: "Internal Server Error",
     });
   }
-  // res.send("Welcome to GET API");
 });
 
 // user insert API
@@ -62,24 +62,19 @@ app.post("/insert", async (req, res) => {
 });
 
 // delete API
-app.delete("/delete/:id?", async (req, res) => {
+app.delete("/delete/:id", async (req, res) => {
   try {
     const userCollection = await getCollection("users");
-    console.log(req.params.id);
+    const userId = req.params.id;
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: "Invalid ObjectId format" });
+    }
+    console.log(`Deleting user with ID: ${userId}`);
     const result = await userCollection.deleteOne({
-      _id: new ObjectId(req.params.id),
+      _id: new ObjectId(userId),
     });
-    //     return res.status(201).json({
-    //       //    status: 1,
-    //       msg: "Item Deleted",
-    //       deletedData: result,
-    //     });
     if (result.deletedCount === 1) {
-      return res.status(201).json({
-        //    status: 1,
-        msg: "Item Deleted",
-        deletedData: result,
-      });
+      return res.status(204).send("User Deleted");
     } else {
       return res.status(404).json({ error: "User not found" });
     }
@@ -88,59 +83,41 @@ app.delete("/delete/:id?", async (req, res) => {
   }
 });
 
+// update API
+app.put("/update/:id", async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const update = req.body;
+    console.log(update);
+    console.log(Object.keys(update).length);
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: "Invalid ObjectId format" });
+    }
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ error: "No update data provided" });
+    }
+    const userCollection = await getCollection("users");
+    const result = await userCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: update }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    return res.status(200).json({
+      status: 1,
+      msg: "User updated",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-// require("dotenv").config();
-// const express = require("express");
-// const cors = require("cors");
-// const {ObjectId} = require("mongodb")
-// const { dbConnection } = require("./dbConnection");
-
-// const app = express();
-// app.use(cors());
-// app.use(express.json()); // Middleware for JSON parsing
-
-// // Home Route
-// app.get("/", async (req, res) => {
-//      let myDB = await dbConnection();
-//      let studentCollection = myDB.collection("students");
-//      let data = await studentCollection.find().toArray();
-//      res.status(201).json({
-//             message: "Student list",
-//           //   database: dbName,
-//             insertedData: data
-//         });
-// //     res.send("Welcome to the API!");
-// });
-
-// // Student Insert Route
-// app.post("/student-insert", async (req, res) => {
-//     try {
-//         let myDB = await dbConnection(); // Get the database instance
-//         let dbName = myDB.databaseName; // Get database name
-
-//         let { sName, sEmail } = req.body;
-//         if (!sName || !sEmail) {
-//             return res.status(400).json({ error: "Missing required fields" });
-//         }
-
-//         let studentCollection = myDB.collection("students"); // Create collection dynamically
-//         let obj = { sName, sEmail };
-//         let result = await studentCollection.insertOne(obj);
-
-//         res.status(201).json({
-//             message: "Student inserted successfully",
-//             database: dbName,
-//             insertedData: result
-//         });
-//     } catch (error) {
-//         console.error("Error inserting student:", error);
-//         res.status(500).json({ error: "Internal server error" });
-//     }
-// });
 // app.delete("/student-delete/:id?", async (req, res) => {
 //      let paramsData = req.params.id;
 //      console.log(paramsData)
