@@ -1,140 +1,99 @@
+let express = require("express");
+let mongoose = require("mongoose");
+const enquiryModel = require("./models/enquiry");
 require("dotenv").config();
-const express = require("express");
-const { getCollection } = require("./dbConnection");
-const { ObjectId } = require("mongodb");
 
-const app = express();
+let app = express();
 app.use(express.json());
 
-// users display API
-app.get("/", async (req, res) => {
-  try {
-    const userCollection = await getCollection("users");
-    const result = await userCollection.find().toArray();
-    res.status(200).json({
-      status: 1,
-      msg: "Users List",
-      data: result,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: "Internal Server Error",
-    });
+// Insert API
+app.post("/api/enquiry-insert", (req, res) => {
+  console.log(req.body);
+  let { name, email, phone, message } = req.body;
+
+  if (!name || !email || !phone || !message) {
+    return res.status(400).json({ error: "All fields are required" });
   }
-});
-
-// user insert API
-app.post("/insert", async (req, res) => {
-  try {
-    const userCollection = await getCollection("users");
-    const data = req.body;
-
-    // check if the data is array or object
-    if (Array.isArray(data)) {
-      if (data.length === 0) {
-        return res.status(400).json({ error: "Empty array received" });
-      }
-      // insert multiple data
-      const result = await userCollection.insertMany(data);
-      return res.status(200).json({
+  let enquiry = new enquiryModel({
+    name: name,
+    email: email,
+    phone: phone,
+    message: message,
+  });
+  enquiry
+    .save()
+    .then(() => {
+      res.send({
         status: 1,
-        msg: `${result.insertedCount} users added.`,
-        data: result,
+        msg: "Enquiry saved successfully",
       });
-    } else if (typeof data === "object") {
-      console.log(data.length);
-      if (data.length === undefined || data.length === 0) {
-        return res.status(400).json({ error: "Empty data received" });
-      }
-      // insert a single data
-      const result = await userCollection.insertOne(data);
-      return res.status(200).json({
-        status: 1,
-        msg: "User added",
-        data: result,
+    })
+    .catch((error) => {
+      res.send({
+        status: 0,
+        msg: "Error while saving enquiry",
+        error: error,
       });
-    }
-  } catch (error) {
-    return res.status(500).json({
-      error: "Internal Server Error",
     });
-  }
 });
 
-// delete API
-app.delete("/delete/:id", async (req, res) => {
-  try {
-    const userCollection = await getCollection("users");
-    const userId = req.params.id;
-    if (!ObjectId.isValid(userId)) {
-      return res.status(400).json({ error: "Invalid ObjectId format" });
-    }
-    console.log(`Deleting user with ID: ${userId}`);
-    const result = await userCollection.deleteOne({
-      _id: new ObjectId(userId),
+// Get API
+app.get("/api/enquiry-list", async (req, res) => {
+  let enquiryList = await enquiryModel.find();
+
+  res.status(200).json({
+    status: 1,
+    msg: "Enquiry List",
+    data: enquiryList,
+  });
+});
+
+// Delete API
+app.delete("/api/enquiry-delete/:id", async (req, res) => {
+  let enquiryID = req.params.id;
+  let deleteEnquiry = await enquiryModel.deleteOne({ _id: enquiryID });
+  res.status(200).json({
+    status: 1,
+    msg: "API delete sucessfully",
+    id: enquiryID,
+    delResponse: deleteEnquiry,
+  });
+});
+
+// Update API
+app.put("/api/enquiry-update/:id", async (req, res) => {
+  let enquiryID = req.params.id;
+  let { name, email, phone, message } = req.body;
+  let updateObj = {
+    name: name,
+    email: email,
+    phone: phone,
+    message: message,
+  };
+  let updateResponse = await enquiryModel.updateOne(
+    { _id: enquiryID },
+    updateObj
+  );
+  res.status(200).json({
+    status: 1,
+    msg: "Enquiry update successfully",
+    data: updateResponse,
+    id: enquiryID,
+  });
+});
+
+// Connect to MongoDB with Error Handling
+mongoose
+  .connect(process.env.DBURL, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => {
+    console.log("✅ Connected to MongoDB");
+    app.listen(process.env.PORT || 5000, () => {
+      console.log(`🚀 Server running on port ${process.env.PORT || 5000}`);
     });
-    if (result.deletedCount === 1) {
-      return res.status(204).send("User Deleted");
-    } else {
-      return res.status(404).json({ error: "User not found" });
-    }
-  } catch (error) {
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// update API
-app.put("/update/:id", async (req, res) => {
-  try {
-    const userId = req.params.id;
-    const update = req.body;
-    console.log(update);
-    console.log(Object.keys(update).length);
-    if (!ObjectId.isValid(userId)) {
-      return res.status(400).json({ error: "Invalid ObjectId format" });
-    }
-    if (Object.keys(update).length === 0) {
-      return res.status(400).json({ error: "No update data provided" });
-    }
-    const userCollection = await getCollection("users");
-    const result = await userCollection.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: update }
-    );
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    return res.status(200).json({
-      status: 1,
-      msg: "User updated",
-      data: result,
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-// app.delete("/student-delete/:id?", async (req, res) => {
-//      let paramsData = req.params.id;
-//      console.log(paramsData)
-//      let myDB = await dbConnection()
-//      let dbName = myDB.databaseName;
-//      let studentCollection = myDB.collection("students")
-//      let deleteItem = await studentCollection.deleteOne({ _id: new ObjectId(paramsData) })
-//      res.status(201).json({
-//           message: "Delete user id",
-//           database: dbName,
-//           deltedData: deleteItem
-//      })
-//      res.send("Delete API")
-// })
-
-// // Start Server
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => {
-//     console.log(`Server running on port ${PORT}`);
-// });
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err);
+  });
